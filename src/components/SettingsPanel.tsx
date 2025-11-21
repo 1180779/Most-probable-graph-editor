@@ -6,6 +6,8 @@ interface SettingsPanelProps {
   setNodeRadius: (radius: number) => void;
   curveOffset: number;
   setCurveOffset: (offset: number) => void;
+  layoutRadius: number;
+  setLayoutRadius: (radius: number) => void;
   onClose: () => void;
 }
 
@@ -14,6 +16,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   setNodeRadius,
   curveOffset,
   setCurveOffset,
+  layoutRadius,
+  setLayoutRadius,
   onClose,
 }) => {
   return (
@@ -40,6 +44,16 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
           max="200"
           value={curveOffset}
           onChange={(e) => setCurveOffset(Number(e.target.value))}
+        />
+      </div>
+      <div className="setting">
+        <label>Layout Radius: {layoutRadius}</label>
+        <input
+          type="range"
+          min="20"
+          max="500"
+          value={layoutRadius}
+          onChange={(e) => setLayoutRadius(Number(e.target.value))}
         />
       </div>
     </div>

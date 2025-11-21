@@ -2,26 +2,16 @@ import React, {useState, useRef, useEffect} from 'react';
 import ContextMenu, {type MenuOption} from './ContextMenu';
 import Modal from './Modal';
 import './ContextMenu.css';
-
-type AdjacencyMatrix = number[][];
-
-interface Node {
-    id: number;
-    x: number;
-    y: number;
-}
-
-interface GraphState {
-    nodes: Node[];
-    matrix: AdjacencyMatrix;
-    viewOffset: { x: number; y: number };
-    scale: number;
-    selectedElement: { type: 'node' | 'edge'; id: string } | null;
-}
-
-interface NodeMapping {
-    [g1Index: number]: { g2Index: number; colorIndex: number };
-}
+import type { Node, GraphState, NodeMapping, SolutionNodeMapping } from '../types/graph.types';
+import { parseMatrix } from '../utils/graphOperations';
+import {
+  createCircularLayout,
+  createLinearLayout,
+  createPathMatrix
+} from '../utils/graphGenerators';
+import { getNodeColor } from '../utils/colorUtils';
+import { getEdgePath, getEdgeTextPosition } from '../utils/edgeUtils';
+import { MAPPED_HIGHLIGHT_COLOR, SELF_LOOP_RADIUS, DRAG_THRESHOLD } from '../constants/visualization';
 
 interface InteractiveCanvasProps {
     graph: GraphState;
@@ -30,21 +20,15 @@ interface InteractiveCanvasProps {
     onRemoveMapping?: (g1NodeId: number) => void;
     onSaveGraph?: (filename: string) => void;
     nodeMapping?: NodeMapping;
+    solutionNodeMapping?: SolutionNodeMapping;
     isG2?: boolean;
     isSolution?: boolean;
     selectionForMapping?: number | null;
     nodeRadius: number;
     curveOffset: number;
+    layoutRadius: number;
 }
 
-const COLORS = [
-    '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b',
-    '#e377c2', '#7f7f7f', '#bcbd22', '#17becf', '#aec7e8', '#ffbb78',
-    '#98df8a', '#ff9896', '#c5b0d5', '#c49c94', '#f7b6d2', '#c7c7c7',
-    '#dbdb8d', '#9edae5'
-];
-const SELF_LOOP_RADIUS = 30;
-const DRAG_THRESHOLD = 5; // Pixels to move before it's a drag
 
 const InteractiveCanvas: React.FC<InteractiveCanvasProps> = ({
                                                                  graph,
@@ -53,11 +37,13 @@ const InteractiveCanvas: React.FC<InteractiveCanvasProps> = ({
                                                                  onRemoveMapping,
                                                                  onSaveGraph,
                                                                  nodeMapping = {},
+                                                                 solutionNodeMapping = {},
                                                                  isG2 = false,
                                                                  isSolution = false,
                                                                  selectionForMapping,
                                                                  nodeRadius,
                                                                  curveOffset,
+                                                                 layoutRadius,
                                                              }) => {
     const [isPanning, setIsPanning] = useState(false);
     const [panStart, setPanStart] = useState({x: 0, y: 0});
@@ -539,29 +525,20 @@ const InteractiveCanvas: React.FC<InteractiveCanvasProps> = ({
         if (!file) return;
         const reader = new FileReader();
         reader.onload = (e) => {
-            const content = e.target?.result as string;
-            const lines = content.split('\n');
-            const size = parseInt(lines[0], 10);
-            if (isNaN(size)) {
-                alert('Invalid graph file format.');
-                return;
+            try {
+                const content = e.target?.result as string;
+                const matrix = parseMatrix(content);
+                const numNodes = matrix.length;
+                const nodes = createCircularLayout(numNodes, 0, 0, layoutRadius);
+                setGraph(g => ({
+                    ...g,
+                    nodes,
+                    matrix,
+                    selectedElement: null,
+                }));
+            } catch (error) {
+                alert(error instanceof Error ? error.message : 'Invalid graph file format.');
             }
-            const matrix = lines.slice(1, 1 + size).map(line => line.split(' ').map(Number));
-            const numNodes = matrix.length;
-            const nodes: Node[] = [];
-            const radius = 150;
-            const centerX = 250;
-            const centerY = 250;
-            for (let i = 0; i < numNodes; i++) {
-                const angle = (i / numNodes) * 2 * Math.PI;
-                nodes.push({id: i, x: centerX + radius * Math.cos(angle), y: centerY + radius * Math.sin(angle)});
-            }
-            setGraph(g => ({
-                ...g,
-                nodes,
-                matrix,
-                selectedElement: null,
-            }));
         };
         reader.readAsText(file);
         if (event.target) {
@@ -580,6 +557,64 @@ const InteractiveCanvas: React.FC<InteractiveCanvasProps> = ({
         const a = document.createElement('a');
         a.href = url;
         a.download = 'canvas_state.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    };
+
+    const saveAsSVG = () => {
+        if (!svgRef.current) return;
+    
+        const svgElement = svgRef.current.cloneNode(true) as SVGSVGElement;
+        const g = svgElement.querySelector('g');
+    
+        if (!g || graph.nodes.length === 0) {
+            // Handle case with no nodes or no group element
+            const svgData = new XMLSerializer().serializeToString(svgElement);
+            const blob = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "canvas.svg";
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            return;
+        }
+    
+        // Calculate bounding box of all nodes
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        graph.nodes.forEach(node => {
+            minX = Math.min(minX, node.x);
+            minY = Math.min(minY, node.y);
+            maxX = Math.max(maxX, node.x);
+            maxY = Math.max(maxY, node.y);
+        });
+    
+        const padding = nodeRadius * 2;
+        const viewBox = {
+            x: minX - padding,
+            y: minY - padding,
+            width: (maxX - minX) + padding * 2,
+            height: (maxY - minY) + padding * 2,
+        };
+    
+        // Reset transform on the group element
+        g.setAttribute('transform', '');
+    
+        // Set viewBox on the SVG element
+        svgElement.setAttribute('viewBox', `${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`);
+        svgElement.removeAttribute('width');
+        svgElement.removeAttribute('height');
+    
+        const svgData = new XMLSerializer().serializeToString(svgElement);
+        const blob = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "canvas.svg";
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -625,26 +660,22 @@ const InteractiveCanvas: React.FC<InteractiveCanvasProps> = ({
 
         setGraph(g => {
             const startId = g.nodes.length;
-            const newNodes: Node[] = [];
-            const newIds = new Set<number>();
-
             const {x: startX, y: startY} = canvasContextMenu
                 ? {
-                    x: (canvasContextMenu.x - g.viewOffset.x) / g.scale,
-                    y: (canvasContextMenu.y - g.viewOffset.y) / g.scale
+                    x: (canvasContextMenu.x - (svgRef.current?.getBoundingClientRect().left ?? 0) - g.viewOffset.x) / g.scale,
+                    y: (canvasContextMenu.y - (svgRef.current?.getBoundingClientRect().top ?? 0) - g.viewOffset.y) / g.scale
                 }
                 : {x: 100, y: 100};
 
-            for (let i = 0; i < numVertices; i++) {
-                const newNodeId = startId + i;
-                newNodes.push({
-                    id: newNodeId,
-                    x: startX + i * (nodeRadius * 4),
-                    y: startY,
-                });
-                newIds.add(newNodeId);
-            }
+            // Create new nodes using generator
+            const newNodesTemplate = createLinearLayout(numVertices, startX, startY, layoutRadius);
+            const newNodes = newNodesTemplate.map((node, i) => ({ ...node, id: startId + i }));
+            const newIds = new Set(newNodes.map(n => n.id));
 
+            // Create adjacency matrix for the path
+            const pathMatrix = createPathMatrix(numVertices, edgeCount);
+
+            // Merge matrices
             const newSize = g.matrix.length + numVertices;
             const newMatrix = Array.from({length: newSize}, () => Array(newSize).fill(0));
 
@@ -654,8 +685,10 @@ const InteractiveCanvas: React.FC<InteractiveCanvasProps> = ({
                 }
             }
 
-            for (let i = 0; i < numVertices - 1; i++) {
-                newMatrix[startId + i][startId + i + 1] = edgeCount;
+            for (let i = 0; i < numVertices; i++) {
+                for (let j = 0; j < numVertices; j++) {
+                    newMatrix[startId + i][startId + j] = pathMatrix[i][j];
+                }
             }
 
             setSelectedNodeIds(newIds);
@@ -685,8 +718,8 @@ const InteractiveCanvas: React.FC<InteractiveCanvasProps> = ({
 
             const {x: startX, y: startY} = canvasContextMenu
                 ? {
-                    x: (canvasContextMenu.x - g.viewOffset.x) / g.scale,
-                    y: (canvasContextMenu.y - g.viewOffset.y) / g.scale
+                    x: (canvasContextMenu.x - (svgRef.current?.getBoundingClientRect().left ?? 0) - g.viewOffset.x) / g.scale,
+                    y: (canvasContextMenu.y - (svgRef.current?.getBoundingClientRect().top ?? 0) - g.viewOffset.y) / g.scale
                 }
                 : {x: 100, y: 100};
 
@@ -694,7 +727,7 @@ const InteractiveCanvas: React.FC<InteractiveCanvasProps> = ({
                 const newNodeId = startId + i;
                 newNodes.push({
                     id: newNodeId,
-                    x: startX + i * (nodeRadius * 4),
+                    x: startX + i * (layoutRadius / (numVertices -1) * 2),
                     y: startY,
                 });
                 newIds.add(newNodeId);
@@ -741,20 +774,18 @@ const InteractiveCanvas: React.FC<InteractiveCanvasProps> = ({
 
             const {x: centerX, y: centerY} = canvasContextMenu
                 ? {
-                    x: (canvasContextMenu.x - g.viewOffset.x) / g.scale,
-                    y: (canvasContextMenu.y - g.viewOffset.y) / g.scale
+                    x: (canvasContextMenu.x - (svgRef.current?.getBoundingClientRect().left ?? 0) - g.viewOffset.x) / g.scale,
+                    y: (canvasContextMenu.y - (svgRef.current?.getBoundingClientRect().top ?? 0) - g.viewOffset.y) / g.scale
                 }
                 : {x: 200, y: 200};
-
-            const radius = nodeRadius * 3 * numVertices / (2 * Math.PI); // Adjust radius based on numVertices
 
             for (let i = 0; i < numVertices; i++) {
                 const angle = (i / numVertices) * 2 * Math.PI;
                 const newNodeId = startId + i;
                 newNodes.push({
                     id: newNodeId,
-                    x: centerX + radius * Math.cos(angle),
-                    y: centerY + radius * Math.sin(angle),
+                    x: centerX + layoutRadius * Math.cos(angle),
+                    y: centerY + layoutRadius * Math.sin(angle),
                 });
                 newIds.add(newNodeId);
             }
@@ -800,20 +831,18 @@ const InteractiveCanvas: React.FC<InteractiveCanvasProps> = ({
 
             const {x: centerX, y: centerY} = canvasContextMenu
                 ? {
-                    x: (canvasContextMenu.x - g.viewOffset.x) / g.scale,
-                    y: (canvasContextMenu.y - g.viewOffset.y) / g.scale
+                    x: (canvasContextMenu.x - (svgRef.current?.getBoundingClientRect().left ?? 0) - g.viewOffset.x) / g.scale,
+                    y: (canvasContextMenu.y - (svgRef.current?.getBoundingClientRect().top ?? 0) - g.viewOffset.y) / g.scale
                 }
                 : {x: 200, y: 200};
-
-            const radius = nodeRadius * 3 * numVertices / (2 * Math.PI);
 
             for (let i = 0; i < numVertices; i++) {
                 const angle = (i / numVertices) * 2 * Math.PI;
                 const newNodeId = startId + i;
                 newNodes.push({
                     id: newNodeId,
-                    x: centerX + radius * Math.cos(angle),
-                    y: centerY + radius * Math.sin(angle),
+                    x: centerX + layoutRadius * Math.cos(angle),
+                    y: centerY + layoutRadius * Math.sin(angle),
                 });
                 newIds.add(newNodeId);
             }
@@ -860,12 +889,10 @@ const InteractiveCanvas: React.FC<InteractiveCanvasProps> = ({
 
             const {x: centerX, y: centerY} = canvasContextMenu
                 ? {
-                    x: (canvasContextMenu.x - g.viewOffset.x) / g.scale,
-                    y: (canvasContextMenu.y - g.viewOffset.y) / g.scale
+                    x: (canvasContextMenu.x - (svgRef.current?.getBoundingClientRect().left ?? 0) - g.viewOffset.x) / g.scale,
+                    y: (canvasContextMenu.y - (svgRef.current?.getBoundingClientRect().top ?? 0) - g.viewOffset.y) / g.scale
                 }
                 : {x: 200, y: 200};
-
-            const outerRadius = nodeRadius * 3 * (numVertices - 1) / (2 * Math.PI);
 
             // Center node
             const centerNodeId = startId;
@@ -878,8 +905,8 @@ const InteractiveCanvas: React.FC<InteractiveCanvasProps> = ({
                 const newNodeId = startId + 1 + i;
                 newNodes.push({
                     id: newNodeId,
-                    x: centerX + outerRadius * Math.cos(angle),
-                    y: centerY + outerRadius * Math.sin(angle),
+                    x: centerX + layoutRadius * Math.cos(angle),
+                    y: centerY + layoutRadius * Math.sin(angle),
                 });
                 newIds.add(newNodeId);
             }
@@ -933,12 +960,10 @@ const InteractiveCanvas: React.FC<InteractiveCanvasProps> = ({
 
             const {x: centerX, y: centerY} = canvasContextMenu
                 ? {
-                    x: (canvasContextMenu.x - g.viewOffset.x) / g.scale,
-                    y: (canvasContextMenu.y - g.viewOffset.y) / g.scale
+                    x: (canvasContextMenu.x - (svgRef.current?.getBoundingClientRect().left ?? 0) - g.viewOffset.x) / g.scale,
+                    y: (canvasContextMenu.y - (svgRef.current?.getBoundingClientRect().top ?? 0) - g.viewOffset.y) / g.scale
                 }
                 : {x: 200, y: 200};
-
-            const outerRadius = nodeRadius * 3 * (numVertices - 1) / (2 * Math.PI);
 
             // Center node
             const centerNodeId = startId;
@@ -951,8 +976,8 @@ const InteractiveCanvas: React.FC<InteractiveCanvasProps> = ({
                 const newNodeId = startId + 1 + i;
                 newNodes.push({
                     id: newNodeId,
-                    x: centerX + outerRadius * Math.cos(angle),
-                    y: centerY + outerRadius * Math.sin(angle),
+                    x: centerX + layoutRadius * Math.cos(angle),
+                    y: centerY + layoutRadius * Math.sin(angle),
                 });
                 newIds.add(newNodeId);
             }
@@ -1008,20 +1033,18 @@ const InteractiveCanvas: React.FC<InteractiveCanvasProps> = ({
 
             const {x: centerX, y: centerY} = canvasContextMenu
                 ? {
-                    x: (canvasContextMenu.x - g.viewOffset.x) / g.scale,
-                    y: (canvasContextMenu.y - g.viewOffset.y) / g.scale
+                    x: (canvasContextMenu.x - (svgRef.current?.getBoundingClientRect().left ?? 0) - g.viewOffset.x) / g.scale,
+                    y: (canvasContextMenu.y - (svgRef.current?.getBoundingClientRect().top ?? 0) - g.viewOffset.y) / g.scale
                 }
                 : {x: 200, y: 200};
-
-            const radius = nodeRadius * 3 * numVertices / (2 * Math.PI);
 
             for (let i = 0; i < numVertices; i++) {
                 const angle = (i / numVertices) * 2 * Math.PI;
                 const newNodeId = startId + i;
                 newNodes.push({
                     id: newNodeId,
-                    x: centerX + radius * Math.cos(angle),
-                    y: centerY + radius * Math.sin(angle),
+                    x: centerX + layoutRadius * Math.cos(angle),
+                    y: centerY + layoutRadius * Math.sin(angle),
                 });
                 newIds.add(newNodeId);
             }
@@ -1098,85 +1121,40 @@ const InteractiveCanvas: React.FC<InteractiveCanvasProps> = ({
         setSelectedNodeIds(newSelectedNodeIds);
     };
 
-    const getNodeColor = (nodeId: number) => {
-        if (isSolution) {
-            const mappedInfo = Object.values(nodeMapping).find(
-                (mapping) => mapping.g2Index === nodeId
-            );
-            if (mappedInfo) {
-                return COLORS[mappedInfo.colorIndex % COLORS.length];
+    const applyDefaultFormatting = () => {
+        const selectedIds = Array.from(selectedNodeIds);
+        if (selectedIds.length < 2) return;
+    
+        const { x: centerX, y: centerY } = multiNodeContextMenu || { x: 0, y: 0 };
+    
+        setGraph(g => {
+            const { x: graphCenterX, y: graphCenterY } = {
+                x: (centerX - (svgRef.current?.getBoundingClientRect().left ?? 0) - g.viewOffset.x) / g.scale,
+                y: (centerY - (svgRef.current?.getBoundingClientRect().top ?? 0) - g.viewOffset.y) / g.scale
+            };
+    
+            const numSelected = selectedIds.length;
+            let newNodesLayout;
+    
+            if (numSelected === 2) {
+                newNodesLayout = createLinearLayout(numSelected, graphCenterX, graphCenterY, layoutRadius);
+            } else {
+                newNodesLayout = createCircularLayout(numSelected, graphCenterX, graphCenterY, layoutRadius);
             }
-        } else if (!isG2) {
-            if (nodeMapping[nodeId]) {
-                return COLORS[nodeMapping[nodeId].colorIndex % COLORS.length];
-            }
-        } else {
-            const mappedInfo = Object.values(nodeMapping).find(
-                (mapping) => mapping.g2Index === nodeId
-            );
-            if (mappedInfo) {
-                return COLORS[mappedInfo.colorIndex % COLORS.length];
-            }
-        }
-        return '#3498db';
+    
+            const newNodes = g.nodes.map(node => {
+                const selectedIndex = selectedIds.indexOf(node.id);
+                if (selectedIndex !== -1) {
+                    const newLayoutNode = newNodesLayout[selectedIndex];
+                    return { ...node, x: newLayoutNode.x, y: newLayoutNode.y };
+                }
+                return node;
+            });
+    
+            return { ...g, nodes: newNodes };
+        });
     };
 
-    const getEdgePath = (source: Node, target: Node, isBidirectional: boolean) => {
-        if (source.id === target.id) {
-            const x = source.x;
-            const y = source.y;
-            return `M ${x} ${y - nodeRadius} A ${SELF_LOOP_RADIUS} ${SELF_LOOP_RADIUS} 0 1 1 ${x + 1} ${y - nodeRadius}`;
-        }
-
-        const dx = target.x - source.x;
-        const dy = target.y - source.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        const nx = dx / dist;
-        const ny = dy / dist;
-
-        const sourceX = source.x + nx * nodeRadius;
-        const sourceY = source.y + ny * nodeRadius;
-        const targetX = target.x - nx * nodeRadius;
-        const targetY = target.y - ny * nodeRadius;
-
-        if (isBidirectional) {
-            const shiftAmount = 8;
-            const sourcePerpX = -ny * shiftAmount;
-            const sourcePerpY = nx * shiftAmount;
-
-            const shiftedSourceX = sourceX + sourcePerpX;
-            const shiftedSourceY = sourceY + sourcePerpY;
-            const shiftedTargetX = targetX + sourcePerpX;
-            const shiftedTargetY = targetY + sourcePerpY;
-
-            const midX = (shiftedSourceX + shiftedTargetX) / 2;
-            const midY = (shiftedSourceY + shiftedTargetY) / 2;
-            const controlX = midX - ny * curveOffset;
-            const controlY = midY + nx * curveOffset;
-            return `M ${shiftedSourceX} ${shiftedSourceY} Q ${controlX} ${controlY} ${shiftedTargetX} ${shiftedTargetY}`;
-        }
-
-        return `M ${sourceX} ${sourceY} L ${targetX} ${targetY}`;
-    };
-
-    const getTextPosition = (source: Node, target: Node, isBidirectional: boolean) => {
-        const midX = (source.x + target.x) / 2;
-        const midY = (source.y + target.y) / 2;
-        const dx = target.x - source.x;
-        const dy = target.y - source.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        const nx = dx / dist;
-        const ny = dy / dist;
-
-        if (source.id === target.id) {
-            return {x: source.x, y: source.y - nodeRadius - SELF_LOOP_RADIUS - 10};
-        }
-        if (isBidirectional) {
-            const labelOffset = curveOffset / 2 + 10;
-            return {x: midX - ny * labelOffset, y: midY + nx * labelOffset};
-        }
-        return {x: midX - ny * 15, y: midY + nx * 15};
-    };
 
     const contextMenuOptions = (nodeId: number): MenuOption[] => {
         const options: MenuOption[] = [
@@ -1215,6 +1193,7 @@ const InteractiveCanvas: React.FC<InteractiveCanvasProps> = ({
             {label: 'Clear Canvas', action: clearCanvas},
             {label: 'Save Canvas', action: saveCanvas},
             {label: 'Load Canvas', action: triggerLoadCanvas},
+            {label: 'Save as SVG', action: saveAsSVG},
         ];
         if (onSaveGraph) {
             options.push({label: 'Save Graph', action: () => onSaveGraph('graph.txt')});
@@ -1228,6 +1207,7 @@ const InteractiveCanvas: React.FC<InteractiveCanvasProps> = ({
         if (selectedNodeIds.size > 0) {
             options.push({label: 'Remove Selected Nodes', action: deleteSelectedNodes});
             options.push({label: 'Shuffle Selected Nodes', action: shuffleSelectedNodes});
+            options.push({label: 'Apply Default Formatting', action: applyDefaultFormatting});
         }
         return options;
     };
@@ -1496,7 +1476,7 @@ const InteractiveCanvas: React.FC<InteractiveCanvasProps> = ({
                         orient="auto"
                         viewBox="0 0 8 6"
                     >
-                        <path d="M0 0 L8 3 L0 6 Z" fill="orange"/>
+                        <path d="M0 0 L8 3 L0 6 Z" fill={MAPPED_HIGHLIGHT_COLOR}/>
                     </marker>
                 </defs>
                 <g transform={`translate(${graph.viewOffset.x}, ${graph.viewOffset.y}) scale(${graph.scale})`}>
@@ -1521,8 +1501,8 @@ const InteractiveCanvas: React.FC<InteractiveCanvasProps> = ({
                                     const edgeId = `${i}-${j}`;
                                     const isSelected = graph.selectedElement?.id === edgeId;
                                     const isBidirectional = graph.matrix[j]?.[i] > 0 && i !== j;
-                                    const path = getEdgePath(source, target, isBidirectional);
-                                    const textPos = getTextPosition(source, target, isBidirectional);
+                                    const path = getEdgePath(source, target, isBidirectional, nodeRadius, curveOffset, SELF_LOOP_RADIUS);
+                                    const textPos = getEdgeTextPosition(source, target, isBidirectional, nodeRadius, curveOffset, SELF_LOOP_RADIUS);
 
                                     return (
                                         <g key={edgeId} onClick={(e) => handleEdgeClick(e, i, j)}
@@ -1531,7 +1511,7 @@ const InteractiveCanvas: React.FC<InteractiveCanvasProps> = ({
                                                   style={{cursor: 'pointer'}}/>
                                             <path
                                                 d={path}
-                                                stroke={isSelected ? 'orange' : '#999'}
+                                                stroke={isSelected ? MAPPED_HIGHLIGHT_COLOR : '#999'}
                                                 strokeWidth="2"
                                                 fill="none"
                                                 markerEnd={isSelected ? 'url(#arrowhead-selected)' : 'url(#arrowhead)'}
@@ -1584,8 +1564,8 @@ const InteractiveCanvas: React.FC<InteractiveCanvasProps> = ({
                                     cx={node.x}
                                     cy={node.y}
                                     r={nodeRadius}
-                                    fill={getNodeColor(node.id)}
-                                    stroke={selectionForMapping === node.id || isSelected ? 'orange' : '#2980b9'}
+                                    fill={getNodeColor(node.id, nodeMapping, isG2, isSolution, solutionNodeMapping)}
+                                    stroke={selectionForMapping === node.id || isSelected ? MAPPED_HIGHLIGHT_COLOR : getNodeColor(node.id, nodeMapping, isG2, isSolution, solutionNodeMapping)}
                                     strokeWidth={3}
                                 />
                                 <text x={node.x} y={node.y} textAnchor="middle" dy=".3em" fill="white"
