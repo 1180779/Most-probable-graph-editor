@@ -1,73 +1,53 @@
-# React + TypeScript + Vite
+# The Graph Editor - Powered by a Pretrained Generative Transformer
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Welcome to the Graph Editor, a feature-rich, interactive tool for creating and manipulating graphs. This project was brought to you in large part by the capabilities of Large Language Models, showcasing a modern, AI-assisted approach to software development.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+*   **Interactive Canvases**: Multiple canvases for comparing and analyzing graphs (Graph 1, Graph 2, and a Solution view).
+*   **Dynamic UI**:
+    *   Resizable vertical and horizontal panes to customize your workspace.
+    *   Toggleable visibility for the second graph and solution canvases via the "View" menu.
+    *   A clean, app-like menu bar for all major operations.
+*   **Complete Canvas Control**:
+    *   **Pan**: Pan the canvas by middle-mouse-clicking and dragging.
+    *   **Zoom**: Zoom in and out using the mouse wheel. The zoom is centered on your cursor for intuitive control.
+    *   **Save/Load Canvas**: Save the entire state of a canvas (including node positions, zoom, and pan) to a JSON file and load it back later.
+*   **Graph Manipulation**:
+    *   **Add Nodes**: Double-click on an empty area of the canvas to create a new node.
+    *   **Add Edges**: Right-click and drag from a source node to a target node to create an edge.
+    *   **Multi-Select**: Hold **Shift** while clicking nodes or drag a selection box to select multiple nodes.
+    *   **Move Nodes**: Click and drag a single node or multiple selected nodes.
+*   **Rich Context Menus**:
+    *   **Node Menu**: Right-click a node to delete it, add a self-loop, or manage its mapping.
+    *   **Edge Menu**: Right-click an edge to delete it or set its weight using a modal dialog.
+    *   **Canvas Menu**: Right-click the canvas to access high-level functions, including clearing the canvas and creating complex subgraphs.
+*   **Subgraph Generation**:
+    *   Quickly add common graph structures via the "Add Subgraph" context menu:
+        *   Path & Double Path
+        *   Cycle & Double Cycle
+        *   Wheel & Double Wheel
+        *   Clique & Double Clique
+*   **Node Mapping**:
+    *   Select a node in Graph 1 and a node in Graph 2 to create a visual mapping between them.
+    *   Mapped nodes are colored to indicate their connection. The coloring is stable and will not change on subsequent mappings.
+    *   Use the **'M'** key as a shortcut to map currently selected nodes.
+*   **Project State**: Save and load the entire application state, including all graphs and mappings, to a single file.
 
-## React Compiler
+## How to Use
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+1.  **Adding Nodes**: Double-click on the canvas.
+2.  **Adding Edges**: Right-click and drag from one node to another.
+3.  **Panning**: Middle-mouse-click and drag.
+4.  **Zooming**: Use the mouse scroll wheel.
+5.  **Mapping Nodes**:
+    *   Click a node in Graph 1.
+    *   Click a node in Graph 2.
+    *   Press the **'M'** key or use the "Map Selected Nodes" option in the "Tools" menu.
+6.  **Accessing Menus**:
+    *   **Top Menu Bar**: Access all major features like state management, UI settings, and mapping tools.
+    *   **Context Menus**: Right-click on nodes, edges, or the canvas itself for context-specific actions.
 
-## Expanding the ESLint configuration
+## A Note on Development
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
-
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+This project was developed iteratively with significant assistance from an AI code assistant. The development process favored rapid prototyping and feature implementation over a rigid, predefined architecture. As such, you will find that the architecture is emergent rather than formally documented. This README serves as the primary guide to the project's functionality and structure.
