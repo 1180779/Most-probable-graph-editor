@@ -18,6 +18,7 @@ Welcome to the Graph Editor, a feature-rich, interactive tool for creating and m
     *   **Add Edges**: Right-click and drag from a source node to a target node to create an edge.
     *   **Multi-Select**: Hold **Shift** while clicking nodes or drag a selection box to select multiple nodes.
     *   **Move Nodes**: Click and drag a single node or multiple selected nodes.
+    *   **Copy Nodes**: Select multiple nodes and right-click to access "Copy Selected Nodes" which duplicates the selected nodes with their internal edge structure. The copied nodes are automatically selected for easy repositioning.
 *   **Rich Context Menus**:
     *   **Node Menu**: Right-click a node to delete it, add a self-loop, or manage its mapping.
     *   **Edge Menu**: Right-click an edge to delete it or set its weight using a modal dialog.
@@ -40,11 +41,16 @@ Welcome to the Graph Editor, a feature-rich, interactive tool for creating and m
 2.  **Adding Edges**: Right-click and drag from one node to another.
 3.  **Panning**: Middle-mouse-click and drag.
 4.  **Zooming**: Use the mouse scroll wheel.
-5.  **Mapping Nodes**:
+5.  **Copying Nodes**:
+    *   Select multiple nodes (shift-click or drag a selection box).
+    *   Right-click on the canvas.
+    *   Choose "Copy Selected Nodes" from the context menu.
+    *   The copied nodes will appear offset from the originals and will be automatically selected for easy repositioning.
+6.  **Mapping Nodes**:
     *   Click a node in Graph 1.
     *   Click a node in Graph 2.
     *   Press the **'M'** key or use the "Map Selected Nodes" option in the "Tools" menu.
-6.  **Accessing Menus**:
+7.  **Accessing Menus**:
     *   **Top Menu Bar**: Access all major features like state management, UI settings, and mapping tools.
     *   **Context Menus**: Right-click on nodes, edges, or the canvas itself for context-specific actions.
 

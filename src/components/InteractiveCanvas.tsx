@@ -1202,9 +1202,73 @@ const InteractiveCanvas: React.FC<InteractiveCanvasProps> = ({
         return options;
     };
 
+    const copySelectedNodes = () => {
+        const selectedIds = Array.from(selectedNodeIds);
+        if (selectedIds.length === 0) return;
+
+        setGraph(g => {
+            const startId = g.nodes.length;
+
+            // Create mapping from old IDs to new IDs
+            const idMapping = new Map<number, number>();
+            selectedIds.forEach((oldId, index) => {
+                idMapping.set(oldId, startId + index);
+            });
+
+            // Create new nodes with offset positions
+            const COPY_OFFSET = 50; // Offset distance for copied nodes
+            const newNodes = selectedIds.map((oldId, index) => {
+                const oldNode = g.nodes.find(n => n.id === oldId);
+                if (!oldNode) return null;
+
+                return {
+                    id: startId + index,
+                    x: oldNode.x + COPY_OFFSET,
+                    y: oldNode.y + COPY_OFFSET,
+                };
+            }).filter(node => node !== null) as typeof g.nodes;
+
+            // Create expanded adjacency matrix
+            const newSize = g.matrix.length + newNodes.length;
+            const newMatrix = Array.from({length: newSize}, () => Array(newSize).fill(0));
+
+            // Copy existing matrix
+            for (let i = 0; i < g.matrix.length; i++) {
+                for (let j = 0; j < g.matrix.length; j++) {
+                    newMatrix[i][j] = g.matrix[i][j];
+                }
+            }
+
+            // Copy edges between selected nodes to new nodes
+            for (let i = 0; i < selectedIds.length; i++) {
+                for (let j = 0; j < selectedIds.length; j++) {
+                    const oldSourceId = selectedIds[i];
+                    const oldTargetId = selectedIds[j];
+                    const edgeCount = g.matrix[oldSourceId]?.[oldTargetId] || 0;
+
+                    const newSourceId = idMapping.get(oldSourceId)!;
+                    const newTargetId = idMapping.get(oldTargetId)!;
+
+                    newMatrix[newSourceId][newTargetId] = edgeCount;
+                }
+            }
+
+            // Select the newly created nodes
+            const newSelectedIds = new Set(newNodes.map(n => n.id));
+            setSelectedNodeIds(newSelectedIds);
+
+            return {
+                ...g,
+                nodes: [...g.nodes, ...newNodes],
+                matrix: newMatrix,
+            };
+        });
+    };
+
     const multiNodeContextMenuOptions = (): MenuOption[] => {
         const options: MenuOption[] = [];
         if (selectedNodeIds.size > 0) {
+            options.push({label: 'Copy Selected Nodes', action: copySelectedNodes});
             options.push({label: 'Remove Selected Nodes', action: deleteSelectedNodes});
             options.push({label: 'Shuffle Selected Nodes', action: shuffleSelectedNodes});
             options.push({label: 'Apply Default Formatting', action: applyDefaultFormatting});

@@ -82,11 +82,29 @@ export function createMappedGraph(
 /**
  * Formats an adjacency matrix to the text file format.
  * Format: first line is the number of vertices, followed by n lines of the matrix.
+ * All cells are right-aligned to the same width (max width of all values).
  */
 export function formatMatrix(matrix: AdjacencyMatrix): string {
   const n = matrix.length;
   if (n === 0) return '0';
-  return `${n}\n${matrix.map(row => row.join(' ')).join('\n')}`;
+
+  // Find the maximum width needed for any cell value
+  let maxWidth = 1;
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      const width = String(matrix[i][j]).length;
+      if (width > maxWidth) {
+        maxWidth = width;
+      }
+    }
+  }
+
+  // Format each row with right-aligned cells
+  const formattedRows = matrix.map(row =>
+    row.map(value => String(value).padStart(maxWidth, ' ')).join(' ')
+  );
+
+  return `${n}\n${formattedRows.join('\n')}`;
 }
 
 /**
