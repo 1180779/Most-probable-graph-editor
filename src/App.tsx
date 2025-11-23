@@ -12,13 +12,17 @@ import {
   saveGraphToFile,
   createSolutionFromMapping
 } from './utils/stateManager';
+import { loadSettings, saveSettings } from './utils/localStorage';
 
 const App: React.FC = () => {
   const [graph1, setGraph1] = useState<GraphState>(initialGraphState);
   const [graph2, setGraph2] = useState<GraphState>(initialGraphState);
   const [solutionGraph, setSolutionGraph] = useState<GraphState>(initialGraphState);
   const [solutionNodeMapping, setSolutionNodeMapping] = useState<SolutionNodeMapping>({});
-  const [edgeCombineStrategy, setEdgeCombineStrategy] = useState<EdgeCombineStrategy>('max');
+
+  // Load settings from local storage
+  const savedSettings = loadSettings();
+  const [edgeCombineStrategy, setEdgeCombineStrategy] = useState<EdgeCombineStrategy>(savedSettings.edgeCombineStrategy);
 
   const {
     nodeMapping,
@@ -32,18 +36,32 @@ const App: React.FC = () => {
     handleRemoveMapping,
   } = useNodeMapping();
 
-  const [horizontalDivider, setHorizontalDivider] = useState(50);
-  const [verticalDivider, setVerticalDivider] = useState(50);
+  const [horizontalDivider, setHorizontalDivider] = useState(savedSettings.horizontalDivider);
+  const [verticalDivider, setVerticalDivider] = useState(savedSettings.verticalDivider);
   const [isDraggingHorizontal, setIsDraggingHorizontal] = useState(false);
   const [isDraggingVertical, setIsDraggingVertical] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [showGraph2, setShowGraph2] = useState(true);
-  const [showSolution, setShowSolution] = useState(true);
-  const [nodeRadius, setNodeRadius] = useState(10);
-  const [curveOffset, setCurveOffset] = useState(0);
-  const [layoutRadius, setLayoutRadius] = useState(100);
+  const [showGraph2, setShowGraph2] = useState(savedSettings.showGraph2);
+  const [showSolution, setShowSolution] = useState(savedSettings.showSolution);
+  const [nodeRadius, setNodeRadius] = useState(savedSettings.nodeRadius);
+  const [curveOffset, setCurveOffset] = useState(savedSettings.curveOffset);
+  const [layoutRadius, setLayoutRadius] = useState(savedSettings.layoutRadius);
   const mainContentRef = useRef<HTMLDivElement>(null);
   const stateFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Save settings to local storage whenever they change
+  useEffect(() => {
+    saveSettings({
+      nodeRadius,
+      curveOffset,
+      layoutRadius,
+      horizontalDivider,
+      verticalDivider,
+      showGraph2,
+      showSolution,
+      edgeCombineStrategy,
+    });
+  }, [nodeRadius, curveOffset, layoutRadius, horizontalDivider, verticalDivider, showGraph2, showSolution, edgeCombineStrategy]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -140,6 +158,28 @@ const App: React.FC = () => {
     stateFileInputRef.current?.click();
   };
 
+  const handleResetSettings = () => {
+    const defaults = {
+      nodeRadius: 10,
+      curveOffset: 0,
+      layoutRadius: 100,
+      horizontalDivider: 50,
+      verticalDivider: 50,
+      showGraph2: true,
+      showSolution: true,
+      edgeCombineStrategy: 'max' as EdgeCombineStrategy,
+    };
+
+    setNodeRadius(defaults.nodeRadius);
+    setCurveOffset(defaults.curveOffset);
+    setLayoutRadius(defaults.layoutRadius);
+    setHorizontalDivider(defaults.horizontalDivider);
+    setVerticalDivider(defaults.verticalDivider);
+    setShowGraph2(defaults.showGraph2);
+    setShowSolution(defaults.showSolution);
+    setEdgeCombineStrategy(defaults.edgeCombineStrategy);
+  };
+
   const menuItems: MenuBarItem[] = [
     {
       label: 'Project',
@@ -193,6 +233,7 @@ const App: React.FC = () => {
           layoutRadius={layoutRadius}
           setLayoutRadius={setLayoutRadius}
           onClose={() => setShowSettings(false)}
+          onReset={handleResetSettings}
         />
       )}
       <main className="main-content" ref={mainContentRef}>

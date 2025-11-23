@@ -9,6 +9,7 @@ interface SettingsPanelProps {
   layoutRadius: number;
   setLayoutRadius: (radius: number) => void;
   onClose: () => void;
+  onReset?: () => void;
 }
 
 const SettingsPanel: React.FC<SettingsPanelProps> = ({
@@ -19,6 +20,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   layoutRadius,
   setLayoutRadius,
   onClose,
+  onReset,
 }) => {
   return (
     <div className="settings-panel">
@@ -56,6 +58,11 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
           onChange={(e) => setLayoutRadius(Number(e.target.value))}
         />
       </div>
+      {onReset && (
+        <div className="setting">
+          <button onClick={onReset} className="reset-btn">Reset to Defaults</button>
+        </div>
+      )}
     </div>
   );
 };

@@ -34,6 +34,7 @@ Welcome to the Graph Editor, a feature-rich, interactive tool for creating and m
     *   Mapped nodes are colored to indicate their connection. The coloring is stable and will not change on subsequent mappings.
     *   Use the **'M'** key as a shortcut to map currently selected nodes.
 *   **Project State**: Save and load the entire application state, including all graphs and mappings, to a single file.
+*   **Persistent Settings**: All visual settings, view preferences, and edge combine strategy are automatically saved to your browser's local storage and restored when you reopen the application. See [docs/LOCAL_STORAGE.md](docs/LOCAL_STORAGE.md) for details.
 
 ## How to Use
 
