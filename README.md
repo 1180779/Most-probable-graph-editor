@@ -2,6 +2,8 @@
 
 Welcome to the Graph Editor, a feature-rich, interactive tool for creating and manipulating graphs. This project was brought to you in large part by the capabilities of Large Language Models, showcasing a modern, AI-assisted approach to software development.
 
+Check it out on github pages [here](https://1180779.github.io/Most-probable-graph-editor/)
+
 ## Features
 
 *   **Interactive Canvases**: Multiple canvases for comparing and analyzing graphs (Graph 1, Graph 2, and a Solution view).
